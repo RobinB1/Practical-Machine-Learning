@@ -1,0 +1,141 @@
+---
+title: 'Cousera Practical Machine Learning: Assignment'
+author: "Robin"
+date: "April 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(tibble)
+library(stringi)
+library(ggplot2)
+library(caret)
+library(rattle)
+library(rpart)
+library(gbm)
+library(forecast)
+library(tree)
+library(randomForest)
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999,warn = -1)
+```
+
+# Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+## Project Goal
+In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Data
+## Training Data set
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+## Test Data Set
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+We commence by downloading the required files and reading in the training and testing datasets, assigning missing values to entries that are currently 'NA' or blank.
+## Get Data
+```{r, GetData}
+if(!file.exists("./data")){dir.create("./data")}
+#Training File
+if(!file.exists("./data/pml-training.csv")){fileUrlTr <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrlTr,destfile="./data/pml-training.csv")}
+# Testing File
+if(!file.exists("./data/pml-testing.csv")){fileUrlTe <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrlTe,destfile="./data/pml-testing.csv")}
+```
+```{r, readData}
+training <- read.csv("./data/pml-training.csv", header = TRUE, na.strings = c("","NA", "NULL"))
+testing <- read.csv("./data/pml-testing.csv", header = TRUE, na.strings = c("","NA", "NULL"))
+dim(training)
+dim(testing)
+```
+Now split the updated training dataset into a training dataset (70% of the observations) and a validation dataset (30% of the observations). This will enable us to perform cross validation when developing our model.
+```{r, split data}
+x_train <- createDataPartition(y = training$classe, p = 0.7, list=FALSE)
+train_set <- training[x_train, colSums(is.na(training)) == 0]
+test_set <- training[-x_train, colSums(is.na(training)) == 0]
+dim(train_set);dim(test_set)
+```
+From the split we now have 2 datasets, the Training set with 13737 observations and 160 variables, the Testing 5885 observations and the same 160 variables.
+We now remove the non-relevant variables.
+## Identify and remove the Non-relevant variables
+
+#```{r remove1}
+#train_set <- training[ , colSums(is.na(training)) == 0]
+#test_set <- 
+#dim(train_set);dim(test_set)
+#``` 
+```{r remove1} 
+ remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+ train_set_del <- train_set[, -which(names(train_set) %in% remove)]
+ test_set_del <- test_set[, -which(names(test_set) %in% remove)]
+ dim(train_set_del); dim(test_set_del)
+```
+#```{r, numeric vales}
+#TrZeroVar <- nearZeroVar(train_set_del[sapply(train_set_del, is.numeric)], saveMetrics = TRUE)
+#train_set_nonzero = train_set_del[,TrZeroVar[, 'nzv']==0]
+#TeZeroVar <- nearZeroVar(test_set_del[sapply(test_set_del, is.numeric)], saveMetrics = TRUE)
+#test_set_nonzero = test_set_del[,TeZeroVar[, 'nzv']==0]
+#dim(train_set_nonzero); dim(test_set_nonzero)
+#```
+After this processing we have 13737 observations and 53 variables to work with in the Training set and 5885 and 53 in the validation set.
+
+## Fitting the models.
+### rpart from Caret
+```{r rp_fit}
+RpModFit <- train(classe ~ .,method="rpart",data=train_set_del)
+save(RpModFit,file="RpModFit.RData")
+```
+View Decision Tree.
+```{r rattle}
+load("RpModFit.RData")
+fancyRpartPlot(RpModFit$finalModel)
+```
+Prediction.
+```{r rp_pred}
+rp.train <- predict(RpModFit, test_set_del)
+```
+Confusion Matrix to check results.
+```{r rp_confus}
+rp_confus <- confusionMatrix(rp.train, test_set_del$classe)
+rp_confus$table
+```
+
+### Random Forests
+```{r rf_fit, message=TRUE, warning=FALSE}
+RfModFit <- train(classe ~ .,method="rf",data=train_set_del)
+
+```
+Prediction.
+```{r rf_pred, message=TRUE, warning=FALSE}
+rf.train <- predict(RfModFit, test_set_del)
+```
+Confusion Matrix to check results.
+```{r rf_confus, message=TRUE, warning=FALSE}
+rf_confus <- confusionMatrix(rf.train, test_set_del$classe)
+rf_confus$table
+```
+### Boosting
+```{r gmb_fit}
+GmbModFit <- train(classe ~ .,method="gmb",data=train_set_del)
+```
+Prediction
+```{r gmb_pred}
+gmb.train <- predict(GmbModFit, test_set_del)
+```
+Confusion Matrix to check results.
+```{r gmb_confus}
+gmb_confus <- confusionMatrix(gmb.train, test_set_del$classe)
+gmb_confus$table
+```
+```{r answers}
+answers <- predict(rf.train, testing)
+answers
+
+````
